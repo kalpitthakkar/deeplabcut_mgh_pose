@@ -185,6 +185,9 @@ def analyze_videos(config,videos,videotype='avi',shuffle=1,trainingsetindex=0,gp
 def GetPoseF(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes,batchsize):
     ''' Batchwise prediction of pose '''
 
+    scmapData = []
+    locrefData = []
+
     PredicteData = np.zeros((nframes, 3 * len(dlc_cfg['all_joints_names'])))
     batch_ind = 0 # keeps track of which image within a batch should be written to
     batch_num = 0 # keeps track of which batch you are at
@@ -218,7 +221,12 @@ def GetPoseF(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes,batchsize):
                     frames[batch_ind] = img_as_ubyte(frame)
 
                 if batch_ind==batchsize-1:
-                    pose = predict.getposeNP(frames,dlc_cfg, sess, inputs, outputs)
+                    #pose = predict.getposeNP(frames,dlc_cfg, sess, inputs, outputs)
+                    scmap, locref, pose = predict.getposeNP(frames,dlc_cfg, sess, inputs, outputs, outall=True)
+                    
+                    scmapData.append(scmap)
+                    locrefData.append(locref)
+                    
                     PredicteData[batch_num*batchsize:(batch_num+1)*batchsize, :] = pose
                     batch_ind = 0
                     batch_num += 1
@@ -234,7 +242,9 @@ def GetPoseF(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes,batchsize):
             counter+=1
 
     pbar.close()
-    return PredicteData,nframes
+    scmapData = np.stack(scmapData)
+    locrefData = np.stack(locrefData)
+    return PredicteData,nframes,scmapData,locrefData
 
 def GetPoseS(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes):
     ''' Non batch wise pose estimation for video cap.'''
@@ -304,7 +314,7 @@ def AnalyzeVideo(video,DLCscorer,trainFraction,cfg,dlc_cfg,sess,inputs, outputs,
 
         print("Starting to extract posture")
         if int(dlc_cfg["batch_size"])>1:
-            PredicteData,nframes=GetPoseF(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes,int(dlc_cfg["batch_size"]))
+            PredicteData,nframes,scmapData,locrefData=GetPoseF(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes,int(dlc_cfg["batch_size"]))
         else:
             PredicteData,nframes=GetPoseS(cfg,dlc_cfg, sess, inputs, outputs,cap,nframes)
 
@@ -333,6 +343,16 @@ def AnalyzeVideo(video,DLCscorer,trainFraction,cfg,dlc_cfg,sess,inputs, outputs,
         metadata = {'data': dictionary}
 
         print("Saving results in %s..." %(Path(video).parents[0]))
+        # Save the score maps as images
+        scmapdir = os.path.join(destfolder, vname + '_scmaps')
+        if not os.path.exists(scmapdir):
+            os.makedirs(scmapdir)
+
+        for i in range(scmapData.shape[0]):
+            img_path = os.path.join(scmapdir, "map%05d.png" % (i+1))
+            scmap = scmapData[i]
+            cv2.imwrite(img_path, scmap)
+        
         auxiliaryfunctions.SaveData(PredicteData[:nframes,:], metadata, dataname, pdindex, range(nframes),save_as_csv)
 
 def GetPosesofFrames(cfg,dlc_cfg, sess, inputs, outputs,directory,framelist,nframes,batchsize,rgb):
