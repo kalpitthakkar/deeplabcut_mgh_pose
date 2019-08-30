@@ -349,9 +349,10 @@ def AnalyzeVideo(video,DLCscorer,trainFraction,cfg,dlc_cfg,sess,inputs, outputs,
             os.makedirs(scmapdir)
 
         for i in range(scmapData.shape[0]):
-            img_path = os.path.join(scmapdir, "map%05d.png" % (i+1))
-            scmap = scmapData[i]
-            cv2.imwrite(img_path, scmap)
+            scmap_batch = scmapData[i]
+            for idx, scmap in enumerate(scmap_batch):
+                img_path = os.path.join(scmapdir, "map%05d.png" % (i*dlc_cfg['batch_size'] + idx))
+                cv2.imwrite(img_path, scmap)
         
         auxiliaryfunctions.SaveData(PredicteData[:nframes,:], metadata, dataname, pdindex, range(nframes),save_as_csv)
 

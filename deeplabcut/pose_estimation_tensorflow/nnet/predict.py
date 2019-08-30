@@ -101,6 +101,7 @@ def getposeNP(image, cfg, sess, inputs, outputs, outall=False):
     outputs_np = sess.run(outputs, feed_dict={inputs: image})
 
     scmap, locref = extract_cnn_outputmulti(outputs_np, cfg) #processes image batch.
+    #scmap_imgs = np.multiply(image, scmap_imgs)
     batchsize,ny,nx,num_joints = scmap.shape
 
     #Combine scoremat and offsets to the final pose.
@@ -113,6 +114,13 @@ def getposeNP(image, cfg, sess, inputs, outputs, outall=False):
             DZ[l,k,:2]=LOCREF[l,MAXLOC[l,k],k,:]
             DZ[l,k,2]=scmap[l,Y[l,k],X[l,k],k]
 
+    scmap_loc = np.zeros_like(scmap)
+    for idx, sc in enumerate(scmap):
+        for jt in range(scmap.shape[-1]):
+            jmax = np.amax(sc[:, :, jt])
+            scmap_loc[idx, :, :, jt] = scmap[idx, :, :, jt] / jmax * 255
+    scmap_imgs = np.sum(scmap_loc, axis=-1)
+    
     X=X.astype('float32')*cfg.stride+.5*cfg.stride+DZ[:,:,0]
     Y=Y.astype('float32')*cfg.stride+.5*cfg.stride+DZ[:,:,1]
     pose = np.empty((cfg['batch_size'], cfg['num_joints']*3), dtype=X.dtype)
@@ -120,6 +128,6 @@ def getposeNP(image, cfg, sess, inputs, outputs, outall=False):
     pose[:,1::3] = Y
     pose[:,2::3] = DZ[:,:,2] #P
     if outall:
-        return scmap, locref, pose
+        return scmap_imgs, locref, pose
     else:
         return pose
